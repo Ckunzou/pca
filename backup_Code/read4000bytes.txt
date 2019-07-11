@@ -1,0 +1,2703 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Ports;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading;
+using Comark.Parallax.Services.CAN;
+using Comark.Parallax.Services.CAN.Drivers;
+using NLog;
+
+namespace Comark.Parallax.Services.DFU
+{
+    class Program
+    {
+        public static string VERSION = "1.1.2";
+
+        private static Logger _logger = LogManager.GetCurrentClassLogger();
+
+        public const int SUCCESS = 0;
+        public const int ERROR_INVALID_PARAMETER = -1;
+        public const int ERROR_CAN_BUS = -2;
+        public const int ERROR_COM_PORT = -2;
+        public const int ERROR_UNKNOWN = -3;
+
+        public const int DEFAULT_DELAY = 2;
+
+        private static List<string> _commands = new List<string>();
+
+        private static uint _command, _destination, _source, _broadcastFlag, _priority, _commandType;
+        private static uint _sourceBoard, _sourceNode, _destinationBoard, _destinationNode;
+
+        private static int DEBUG = 0;
+
+        private static bool FORCE_DETECT = false;
+
+        private static Can.BootloaderInterface INTERFACE = Can.BootloaderInterface.CAN;
+
+        private static Can.BootloaderUsartSpeed INITIAL_USART_BAUD_RATE = Can.BootloaderUsartSpeed._115200_BPS;
+        private static Can.BootloaderCanSpeed INITIAL_CAN_BAUD_RATE = Can.BootloaderCanSpeed._500_KBPS;
+
+        private static uint BOARD = uint.MaxValue;
+        private static uint NODE = uint.MaxValue;
+
+        private static bool BOOTLOAD = false;
+        private static bool INTERRUPT = false;
+
+        private static int DEVICES = 0;
+
+        private static int DELAY = DEFAULT_DELAY;
+
+        private static Can.CanBroadcastFlag BROADCAST_FLAG = Can.CanBroadcastFlag.None;
+
+        // USART support
+        private static SerialPort _serial = null;
+
+        private static byte[] _response = null;
+        private static byte[] _Moreresponse = null;
+
+        private static string COM_PORT = "COM1";
+        private static int COM_PORT_BAUD_RATE = 115200;
+        private static Parity COM_PORT_PARITY = Parity.None;
+        private static int COM_PORT_DATA_BITS = 8;
+        private static StopBits COM_PORT_STOP_BITS = StopBits.One;
+
+        private static int COM_PORT_TIMEOUT = 250;
+
+        private static AutoResetEvent _event = new AutoResetEvent(false);
+
+        // debug data
+        private static List<CanFrame> _frames = new List<CanFrame>();
+
+        private static int _acks = 0;
+        private static int _nacks = 0;
+
+        // basic lock for awaiting responses
+        private static Semaphore _lock = new Semaphore(0, 1024 * 50);
+
+        private static volatile Dictionary<uint, bool> NODES = new Dictionary<uint, bool>();
+
+        // read into, write from
+        private static volatile byte[] _file = null;
+        private static volatile byte[] _fileReceived = null;
+        private static volatile int _fileIndex = 0;
+        private static volatile uint _fileLength = 0;
+
+        private static volatile byte[] value = new byte[8];
+        private static volatile byte[] fileLengthBytes = new byte[4];
+        private static int _exitCode = 0;
+
+        private static volatile ProgressBar _progress = null;
+
+        static void Main(string[] args)
+        {
+            // parse out common parameters, append other parameters to command sequence
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-debug")
+                {
+                    try
+                    {
+                        DEBUG = Convert.ToInt32(args[i + 1]);
+                        i++;
+                    }
+                    catch
+                    {
+                        DEBUG = 1;
+                    }
+                }
+                else if (args[i] == "-board")
+                {
+                    try { BOARD = Convert.ToUInt32(args[i + 1], 16); }
+                    catch
+                    {
+                        _logger.Error("Error parsing parameter '-board': Invalid value specified");
+                        Environment.Exit(ERROR_INVALID_PARAMETER);
+                    }
+                    i++;
+                }
+                else if (args[i] == "-node")
+                {
+                    try { NODE = Convert.ToUInt32(args[i + 1]); }
+                    catch
+                    {
+                        if (DEBUG > 0) _logger.Error("Error parsing parameter '-node': Invalid value specified");
+                        Environment.Exit(ERROR_INVALID_PARAMETER);
+                    }
+                    i++;
+                }
+                else if (args[i] == "-bootload")
+                {
+                    BOOTLOAD = true;
+                }
+                else if (args[i] == "-interrupt")
+                {
+                    INTERRUPT = true;
+                }
+                else if (args[i] == "-interface")
+                {
+                    Can.BootloaderInterface @interface;
+                    if (!TryParseEnum<Can.BootloaderInterface>(args[i + 1], out @interface))
+                    {
+                        if (DEBUG > 0) _logger.Error("Error parsing parameter '-interface': Invalid value specified");
+                        Environment.Exit(ERROR_INVALID_PARAMETER);
+                    }
+                    i++;
+                    INTERFACE = @interface;
+                    COM_PORT = args[++i];
+                }
+                else if (args[i] == "-initial-speed")
+                {
+                    if (INTERFACE == Can.BootloaderInterface.USART)
+                    {
+                        Can.BootloaderUsartSpeed speed;
+                        if (!TryParseEnum<Can.BootloaderUsartSpeed>(args[i + 1], out speed))
+                        {
+                            if (DEBUG > 0) _logger.Error("Error parsing parameter '-initial-speed': Invalid value specified");
+                            Environment.Exit(ERROR_INVALID_PARAMETER);
+                        }
+
+                        i++;
+                        INITIAL_USART_BAUD_RATE = speed;
+                    }
+                    else if (INTERFACE == Can.BootloaderInterface.CAN)
+                    {
+                        Can.BootloaderCanSpeed speed;
+                        if (!TryParseEnum<Can.BootloaderCanSpeed>(args[i + 1], out speed))
+                        {
+                            if (DEBUG > 0) _logger.Error("Error parsing parameter '-initial-speed': Invalid value specified");
+                            Environment.Exit(ERROR_INVALID_PARAMETER);
+                        }
+                        i++;
+                        INITIAL_CAN_BAUD_RATE = speed;
+                    }
+                }
+                else if (args[i] == "-force-detect")
+                {
+                    FORCE_DETECT = true;
+                }
+                else if (args[i] == "-delay")
+                {
+                    try { DELAY = (int)Convert.ToUInt32(args[i + 1]); }
+                    catch
+                    {
+                        if (DEBUG > 0) _logger.Error("Error parsing parameter '-delay': Invalid value specified");
+                        Environment.Exit(ERROR_INVALID_PARAMETER);
+                    }
+                    i++;
+                }
+                else if (args[i] == "-help")
+                {
+                    Console.WriteLine("Parallax Bootloader DFU v{0}", VERSION);
+                    Console.WriteLine("Command line application for communicating with the Parallax Bootloader");
+                    Console.WriteLine("NOTE: Multiple bootloader commands can be executed by supplying additional commands and they will be executed in order");
+                    Console.WriteLine("--- Common Configuration Parameters ---");
+                    Console.WriteLine("-debug [level]: Enable debug output [level: 1 = BASIC, 2 = CAN RX, 3 = CAN TX]");
+                    Console.WriteLine("-board [int]: Specify the ID of the board to bootload");
+                    Console.WriteLine("-node [int]: Specify the ID of the node to bootload");
+                    Console.WriteLine("-bootload: Reset the device(s) from the application firmware to the Parallax bootloader");
+                    Console.WriteLine("-interrupt: Interrupt a Parallax Bootloader command that is in progress");
+                    Console.WriteLine("-force-detect: Application will attempt to bootload all target(s) regardless of board and node id uniqueness");
+                    Console.WriteLine("-delay [int]: Override the default write delay");
+                    Console.WriteLine("-interface [interface] [port]: Specify the interface to communicate with the bootloader with (and port if the interface is USART)");
+                    Console.WriteLine("-initial-speed [baud rate]: Override the initial baud rate to use over the desired interface (default: CAN = 500 kbps, USART = 115200 bps)");
+                    Console.WriteLine("-help: Display this help menu");
+                    Console.WriteLine("--- Bootloader Commands ---");
+                    Console.WriteLine("* General Flash Commands *");
+                    Console.WriteLine("-read [flash region] [file]: Read the specified flash region and write the contents to the file");
+                    Console.WriteLine("-write [flash region] [file]: Write the contents of the file to the specified flash region");
+                    Console.WriteLine("-erase [flash region]: Erase the specified flash region");
+                    Console.WriteLine("-verify [flash region]: Verify the contents of the specified flash region");
+                    Console.WriteLine("-execute: Reset and attempt to execute the application");
+                    Console.WriteLine("* User Key Flash Commands *");
+                    Console.WriteLine("-read-key [key]: Reads the desired key from memory");
+                    Console.WriteLine("-write-key [key] [value]: Write the value for the desired key to memory");
+                    Console.WriteLine("-verify-key [key] [value]: Reads the desired key from memory and verifies it against the specified value");
+                    Console.WriteLine("-save: Write the keys from memory to flash");
+                    //Console.WriteLine("* Flash Protect & Unprotect Commands *");
+                    //Console.WriteLine("-read-protect [flash region]: Read protect the specified flash region");
+                    //Console.WriteLine("-read-unprotect [flash region]: Read unprotect the specified flash region");
+                    //Console.WriteLine("-write-protect [flash region]: Write protect the specified flash region");
+                    //Console.WriteLine("-write-unprotect [flash region]: Write unprotect the specified flash region");
+                    Console.WriteLine("* Miscillaneous Commands *");
+                    Console.WriteLine("-version: Get the version of the bootloader");
+                    Console.WriteLine("-speed [baud rate]: Change the speed of the interface being utilized (default: CAN = 500 kbps, USART = 115200 bps)");
+                    Console.WriteLine("-reset [reset type]: Reset the bootloader into the specified mode");
+                    Console.WriteLine("-sleep [duration]: Put the bootloader command sequencer to sleep for the specified duration in ms");
+                    Console.WriteLine("--- Bootloader Command Definitions ---");
+                    Console.WriteLine("Interfaces: 1 = CAN, 2 = USART");
+                    Console.WriteLine("USART Bootloader Speeds: 1 = 921600 bps, 2 = 460800 bps, 3 = 230400 bps, 4 = 115200 bps");
+                    Console.WriteLine("CAN Bootloader Speeds: 1 = 1000 kbps, 2 = 500 kbps, 3 = 250 kbps, 4 = 125 kbps");
+                    Console.WriteLine("Flash Regions: 1 = Bootloader, 2 = User Data, 3 = Application");
+                    Console.WriteLine("Reset Types: 1 = Parallax Bootloader, 2 = STM32 Bootloader");
+                    Console.WriteLine("Keys: 1 = Board (uint8, base 16), 2 = Node (uint8), 3 = Revision (uint8), 4 = Part Number (uint32), 5 = Serial Number (uint32), 6 = Manufacture Date (uint8:month/uint8:day/uint8:year)");
+                    Environment.Exit(SUCCESS);
+                }
+                else
+                {
+                    _commands.Add(args[i]);
+                }
+            }
+
+            if (INTERFACE == Can.BootloaderInterface.USART)
+            {
+                USART_Bootloader();
+            }
+            else if (INTERFACE == Can.BootloaderInterface.CAN)
+            {
+                CAN_Bootloader();
+            }
+
+            Environment.Exit(_exitCode);
+        }
+
+        private static void USART_Bootloader()
+        {
+            // todo
+            _serial = new SerialPort(COM_PORT, COM_PORT_BAUD_RATE, COM_PORT_PARITY, COM_PORT_DATA_BITS, COM_PORT_STOP_BITS);
+
+            _serial.ReadTimeout = COM_PORT_TIMEOUT;
+            _serial.WriteTimeout = COM_PORT_TIMEOUT;
+
+            _serial.DataReceived += SerialPort_DataReceived;
+
+            _serial.Open();
+
+
+            Thread.Sleep(100);
+
+            if (BOOTLOAD)
+            {
+                _logger.Info("Bootloading device(s)...");
+                USART_Bootload();
+            }
+
+            if (INTERRUPT)
+            {
+                _logger.Info("Interrupting device(s)...");
+                USART_Interrupt();
+            }
+
+            Thread.Sleep(100);
+
+            _logger.Info("Detecting bootloadable device...");
+
+            if (USART_WaitForDevice())
+            {
+                DEVICES = 1;
+                _logger.Info("Detected {0} bootloadable devices!", DEVICES);
+            }
+            else
+            {
+                _logger.Error("Error: Unable to detect device(s) in bootloader");
+                Environment.Exit(ERROR_COM_PORT);
+            }
+
+            int commands = 0;
+            string command;
+            bool commandResult;
+            for (int i = 0; i < _commands.Count; i++)
+            {
+                _event.WaitOne(0);
+
+                if (_commands[i].IndexOf("-") == 0)
+                {
+                    command = _commands[i].Substring(1).ToUpper();
+                }
+                else
+                {
+                    command = _commands[i];
+                }
+
+                commandResult = false;
+                // time each command
+                DateTime start = DateTime.Now;
+                commands++;
+
+                try
+                {
+                    if (_commands[i] == "-version")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Getting bootloader version...");
+
+                        if (commandResult = USART_Version())
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully got bootloader version: {0}", (int)Program.value[0]));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, "Error getting bootloader version");
+                        }
+                    }
+                    else if (_commands[i] == "-speed")
+                    {
+                        // todo reconfigure baud rate
+                        Can.BootloaderUsartSpeed speed;
+                        if (!TryParseEnum<Can.BootloaderUsartSpeed>(_commands[++i], out speed))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Changing USART baud rate: {0}...", Enum.GetName(typeof(Can.BootloaderUsartSpeed), speed)));
+
+                        if (USART_Speed(speed))
+                        {
+                            LOG(LogLevel.Info, commands, command, "Reinitializing USART...");
+
+                            // todo reinitiaze usart with correct parameters
+
+                            LOG(LogLevel.Info, commands, command, "Waiting for device(s)...");
+
+                            Thread.Sleep(100);
+
+                            // see if we can communicate with the device at the new CAN baud rate
+                            if (commandResult = USART_WaitForDevice())
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Successfully changed USART baud rate: {0}", Enum.GetName(typeof(Can.BootloaderUsartSpeed), speed)));
+                            }
+                            else
+                            {
+                                LOG(LogLevel.Error, commands, command, "Unable to detect device in bootloader");
+                                Environment.Exit(ERROR_COM_PORT);
+                            }
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Error, commands, command, "Unable to change the devices USART baud rate");
+                            Environment.Exit(ERROR_COM_PORT);
+                        }
+                    }
+                    else if (_commands[i] == "-read")
+                    {
+                        // flash region, file
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file = _commands[++i];
+                        if (File.Exists(file))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("File at specified destination will be overwritten: {0}", _commands[i]));
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Reading flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = USART_Read(region))
+                        {
+                            try
+                            {
+                                File.WriteAllBytes(file, _file);
+                            }
+                            catch { }
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully read flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-write")
+                    {
+                        // flash region, file
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file = _commands[++i];
+                        if (!File.Exists(file))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        try
+                        {
+                            _file = File.ReadAllBytes(file);
+                        }
+                        catch
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading from file, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Writing flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = USART_Write(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully wrote flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error writing flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-erase")
+                    {
+                        // flash region
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Erasing flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = USART_Erase(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully erased flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error erasing flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-verify")
+                    {
+                        // flash region [if region = 1 | 2, verify target is the second parameter]
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file;
+                        byte[] data;
+                        if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+                        {
+                            file = _commands[++i];
+                            if (!File.Exists(file))
+                            {
+                                if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                                continue;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    data = File.ReadAllBytes(file);
+                                }
+                                catch { }
+                            }
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Verifying flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = USART_Verify(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully verified flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error verifying flash region: {0}k", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+
+                        if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+                        {
+                            // todo verify the bootloader or user data regions - compare to data
+                        }
+                    }
+                    else if (_commands[i] == "-read-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Reading key: {0}...", Enum.GetName(typeof(Can.BootloaderKey), key)));
+
+                        if (commandResult = USART_ReadKey(key))
+                        {
+                            string value = "";
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                value = String.Format("{0:X}", (uint)Program.value[3]);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                value = String.Format("{0:X}", (uint)Program.value[3]);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                value = String.Format("{0}", (uint)Program.value[3]);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                value = String.Format("{0}", BitConverter.ToUInt32(Program.value, 3));
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                value = String.Format("{0}", BitConverter.ToUInt32(Program.value, 3));
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                value = String.Format("{0}/{1}/{2}", (uint)Program.value[7], (uint)Program.value[6], (uint)Program.value[5]);
+                            }
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully read key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading key: {0}", Enum.GetName(typeof(Can.BootloaderKey), key)));
+                        }
+
+                    }
+                    else if (_commands[i] == "-write-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string value = _commands[++i];
+                        // max data length, need 1 byte for key
+                        byte[] data = new byte[7];
+
+                        try
+                        {
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 16);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                // month, day, year
+                                Regex date = new Regex(@"(\d{1,2})/(\d{1,2})/(\d{2})", RegexOptions.CultureInvariant);
+                                Match match = date.Match(value);
+                                if (match.Success)
+                                {
+                                    data[0] = (byte)Convert.ToUInt16(match.Groups[1].Value, 10);
+                                    data[1] = (byte)Convert.ToUInt16(match.Groups[2].Value, 10);
+                                    data[2] = (byte)Convert.ToUInt16(match.Groups[3].Value, 10);
+                                }
+                                else
+                                {
+                                    throw new Exception();
+                                }
+                                value = String.Format("{0}/{1}/{2}", (uint)data[0], (uint)data[1], (uint)data[2]);
+                            }
+                        }
+                        catch
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Writing key: {0} = {1}...", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+
+                        if (commandResult = USART_WriteKey(key, data))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully wrote key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Error writing key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                    }
+                    else if (_commands[i] == "-verify-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string value = _commands[++i];
+                        // max data length, need 1 byte for key
+                        byte[] data = new byte[7];
+
+                        try
+                        {
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 16);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                // month, day, year
+                                Regex date = new Regex(@"([1-9]|[0-2])/(\d{1,2})/(\d{2})", RegexOptions.CultureInvariant);
+                                Match match = date.Match(value);
+                                if (match.Success)
+                                {
+                                    data[0] = (byte)Convert.ToUInt16(match.Groups[1].Value, 10);
+                                    data[1] = (byte)Convert.ToUInt16(match.Groups[2].Value, 10);
+                                    data[2] = (byte)Convert.ToUInt16(match.Groups[3].Value, 10);
+                                }
+                                else
+                                {
+                                    throw new Exception();
+                                }
+                                value = String.Format("{0}/{1}/{2}", (uint)data[0], (uint)data[1], (uint)data[2]);
+                            }
+                        }
+                        catch
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Verifying key: {0} = {1}...", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+
+                        if (commandResult = USART_ReadKey(key))
+                        {
+                            string response = "";
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                response = String.Format("0x{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                response = String.Format("{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                response = String.Format("{0}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                response = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                response = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                response = String.Format("{0}/{1}/{2}", (uint)Program.value[2], (uint)Program.value[3], (uint)Program.value[4]);
+                            }
+
+                            if (value == response)
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Successfully verified key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                            }
+                            else
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Error verifying key: {0} = {1}, value = {2}", Enum.GetName(typeof(Can.BootloaderKey), key), value, response));
+                            }
+
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error verifying key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+
+                    }
+                    else if (_commands[i] == "-save")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Saving keys to flash...");
+
+                        if (commandResult = USART_SaveKeys())
+                        {
+                            LOG(LogLevel.Info, commands, command, "Successfully saved keys to flash");
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, "Error saving keys to flash");
+                        }
+                    }
+                    //else if (_commands[i] == "-read-protect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-read-unprotect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-write-protect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-write-unprotect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    else if (_commands[i] == "-execute")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Starting application...");
+
+                        if (commandResult = USART_Execute())
+                        {
+                            LOG(LogLevel.Info, commands, command, "Application successfully started");
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, "Error starting application");
+                        }
+                    }
+                    else if (_commands[i] == "-reset")
+                    {
+                        Can.BootloaderResetType type;
+
+                        if (TryParseEnum<Can.BootloaderResetType>(_commands[i + 1], out type))
+                        {
+                            i++;
+                        }
+                        else
+                        {
+                            type = Can.BootloaderResetType.PARALLAX;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Resetting device(s): {0}...", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+
+                        if (commandResult = USART_Reset(type))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully reset device(s): {0}", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Error resetting device(s): {0}", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+                        }
+                    }
+                    else if (_commands[i] == "-sleep")
+                    {
+                        int duration = int.Parse(_commands[i + 1]);
+                        i++;
+                        commandResult = true;
+                        LOG(LogLevel.Info, commands, command, String.Format("Sleeping for {0} ms...", duration));
+                        Thread.Sleep(duration);
+                    }
+                    else
+                    {
+                        _logger.Warn("Unrecognized command at index [{0}]: {1}", i, command);
+                        commands--;
+                        continue;
+                    }
+                    // output duration command took to execute
+                    TimeSpan timeSpan = DateTime.Now.Subtract(start);
+                    LOG(LogLevel.Info, commands, command, String.Format("Command processed in {0}", timeSpan.ToString()));
+
+                    if (commandResult) _exitCode++;
+                }
+                catch
+                {
+                    if (DEBUG > 0) LOG(LogLevel.Warn, command, String.Format("Insufficient parameters specified for command at index [{0}], skipping command", i));
+                    commands--;
+                    continue;
+                }
+            }
+
+            if (DEBUG > 0)
+            {
+                _logger.Info("Acks: {0}", _acks);
+                _logger.Info("Nacks: {0}", _nacks);
+            }
+        }
+
+        private static void SerialPort_Write(byte command)
+        {
+            _response = null;
+            _serial.Write(new byte[] { command }, 0, 1);
+
+        }
+
+        private static void SerialPort_Write(byte[] command)
+        {
+            _response = null;
+            _serial.Write(command, 0, command.Length);
+        }
+
+        private static bool USART_WaitForDevice()
+        {
+            _event.WaitOne(0);
+
+            SerialPort_Write(Can.PARALLAX_BL_ACK);
+
+            if (!_event.WaitOne(250))
+            {
+                return false;
+            }
+
+
+            return true;
+        }
+
+        private static bool USART_Bootload()
+        {
+            _serial.WriteLine("system bootloader");
+
+            Thread.Sleep(250);
+
+            return true;
+        }
+
+        private static bool USART_Interrupt()
+        {
+            SerialPort_Write(Can.PARALLAX_BL_NACK);
+
+            Thread.Sleep(100);
+
+            return true;
+        }
+
+        private static bool USART_Version()
+        {
+            SerialPort_Write(Can.PARALLAX_BL_VERSION);
+
+            if (!_lock.WaitOne(1000))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool USART_Speed(Can.BootloaderUsartSpeed baudRate)
+        {
+            // todo
+            byte data;
+            if (baudRate == Can.BootloaderUsartSpeed._921600_BPS) data = (byte)Can.BootloaderUsartSpeed._921600_BPS;
+            else if (baudRate == Can.BootloaderUsartSpeed._460800_BPS) data = (byte)Can.BootloaderUsartSpeed._460800_BPS;
+            else if (baudRate == Can.BootloaderUsartSpeed._230400_BPS) data = (byte)Can.BootloaderUsartSpeed._230400_BPS;
+            else if (baudRate == Can.BootloaderUsartSpeed._115200_BPS) data = (byte)Can.BootloaderUsartSpeed._115200_BPS;
+            else return false;
+
+            var cmds = new byte[] { Can.PARALLAX_BL_SPEED, data};
+            SerialPort_Write(cmds);
+            
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            
+
+            return true;
+        }
+
+        private static bool USART_Erase(Can.BootloaderFlashRegion region)
+        {
+            // todo erase flash region
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+                return false;
+            else
+            {
+                var cmds = new byte[] { Can.PARALLAX_BL_ERASE, (byte)region };
+                SerialPort_Write(cmds);
+            }
+
+            // command ack and operation ack both received
+                if (!_lock.WaitOne(30000))
+                {
+                    return false;
+                }
+            return true;
+        }
+
+        private static bool USART_Read(Can.BootloaderFlashRegion region)
+        {
+            var cmds = new byte[] { Can.PARALLAX_BL_READ, (byte)region };
+            SerialPort_Write(cmds);
+            // read to memory, command processor will write to file if successful
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+            {
+                _file = new byte[Can.FLASH_BOOTLOADER_SIZE];
+            }
+            if (region == Can.BootloaderFlashRegion.USER_DATA)
+            {
+                _file = new byte[Can.FLASH_USER_DATA_SIZE];
+            }
+            else if (region == Can.BootloaderFlashRegion.APPLICATION)
+            {
+                _file = new byte[Can.FLASH_APPLICATION_SIZE];
+            }
+
+            for (int i = 0; i < _file.Length; i++)
+            {
+                _file[i] = 0xFF;
+            }
+            
+            Console.Write("Status: ");
+            _progress = new ProgressBar();
+            _progress.Report(0);
+
+            // SerialPort_Write(Can.PARALLAX_BL_READ);
+            //  SerialPort_Write((byte)region);
+            Thread.Sleep(5000);
+            // todo read flash region
+            int x = 0;
+            while (_fileLength > 0)
+            {
+                _file[x] = _fileReceived[x];
+                _fileLength--;
+                x++;
+            }
+            
+            // command ack
+
+            if (!_lock.WaitOne(10000))
+                {
+                    _progress.Dispose();
+                    _progress = null;
+                    Console.WriteLine("Failed!");
+                    return false;
+                }
+            Thread.Sleep(5000);
+            _progress.Report(1);
+            Thread.Sleep(250);
+
+            _progress.Dispose();
+            _progress = null;
+            Console.WriteLine("Success!");
+
+            return true;
+        }
+
+        private static bool USART_Write(Can.BootloaderFlashRegion region)
+        {
+
+            // todo write flash region
+            uint length = (uint)_file.Length;  //length of the file
+            byte[] lengthbytes = new byte[4] { (byte)(length>>24),
+                                               (byte)(length >> 16),
+                                               (byte)(length >> 8),
+                                               (byte)(length >> 0) };
+            uint chunk;
+            uint index = 0;
+            byte[] inputs = new byte[5];
+            byte[] data = new byte[8];
+
+            Console.Write("Status: ");
+            ProgressBar progressBar = new ProgressBar();
+
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+            {
+                return false;
+            }
+            else
+            {
+                inputs[0] = (byte)region;
+                lengthbytes.CopyTo(inputs, 1);
+                // BitConverter.GetBytes(_file.Length).ToArray().CopyTo(data, 1);
+                SerialPort_Write(Can.PARALLAX_BL_WRITE);
+                SerialPort_Write(inputs);
+            }
+
+            if (!_lock.WaitOne(1000))     // flash region ack check
+            {
+                return false;
+            }
+
+            while (length > 0)
+            {
+                chunk = Math.Min(Can.PARALLAX_BL_SEGMENT_SIZE, length);
+                length -= chunk;
+
+                while (chunk > 0)
+                {
+                    Array.Copy(_file, index, data, 0, 1);
+                    SerialPort_Write(Can.PARALLAX_BL_WRITE_SEGMENT);
+                    index += 1;
+                    chunk -= 1;
+
+                    progressBar.Report((double)(_file.Length - (length + chunk)) / _file.Length);
+
+                    Thread.Sleep(DELAY);
+                }
+               
+                // ack for receiving segment
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(1000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+                
+                // ack for writing segment
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(5000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+                
+
+            }
+            progressBar.Report((double)_file.Length / (double)_file.Length);
+            Thread.Sleep(100);
+            // ack for successful write command
+           for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    progressBar.Dispose();
+                    Console.WriteLine("Failed!");
+                    return false;
+                }
+            }
+
+            if (region == Can.BootloaderFlashRegion.APPLICATION)
+            {
+               // ack for application verification
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(15000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+            }
+
+            progressBar.Dispose();
+            Console.WriteLine("Success!");
+
+            return true;
+        }
+
+        private static bool USART_Verify(Can.BootloaderFlashRegion region)
+        {
+            // todo verify flash region
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+            {
+                // do a pseudo verify - read the desired region and do a compare against a buffer
+                return USART_Read(region);
+            }
+            else
+            {
+                SerialPort_Write(Can.PARALLAX_BL_VERIFY);
+            }
+            
+             for (int i = 0; i < DEVICES; i++)
+             {
+                 if (!_lock.WaitOne(15000))
+                 {
+                     return false;
+                 }
+             }
+
+            return true;
+        }
+
+        private static bool USART_Execute()
+        {
+            // todo execute
+            SerialPort_Write(Can.PARALLAX_BL_EXECUTE);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool USART_ReadKey(Can.BootloaderKey key)
+        {
+            // todo read key
+            SerialPort_Write(Can.PARALLAX_BL_READ_KEY);
+            SerialPort_Write((byte)key);
+            for (int i = 0; i < DEVICES; i++)
+             {
+                 if (!_lock.WaitOne(1000))
+                 {
+                     return false;
+                 }
+             }
+
+            return true;
+        }
+
+        private static bool USART_WriteKey(Can.BootloaderKey key, byte[] value)
+        {
+            byte[] data = new byte[8];
+            data[0] = (byte)key;
+            value.CopyTo(data, 1);
+
+            // todo write key
+            SerialPort_Write(Can.PARALLAX_BL_WRITE_KEY);
+            SerialPort_Write(data);
+            
+            for (int i = 0; i < DEVICES; i++)
+               {
+                   if (!_lock.WaitOne(1000))
+                   {
+                       return false;
+                   }
+               }
+               
+            return true;
+        }
+
+        private static bool USART_SaveKeys()
+        {
+            // todo save keys
+            SerialPort_Write(Can.PARALLAX_BL_SAVE_KEYS);
+
+            
+             for (int i = 0; i < DEVICES; i++)
+             {
+                 if (!_lock.WaitOne(1000))
+                 {
+                     return false;
+                 }
+             }
+             
+            return true;
+        }
+
+        private static bool USART_Reset(Can.BootloaderResetType type)
+        {
+            // todo reset
+            SerialPort_Write(Can.PARALLAX_BL_RESET);
+            SerialPort_Write((byte)type);
+
+            for (int i = 0; i < DEVICES; i++)
+             {
+                 if (!_lock.WaitOne(1000))
+                 {
+                     return false;
+                 }
+             }
+             
+            if (type == Can.BootloaderResetType.PARALLAX)
+            {
+                Thread.Sleep(1000);
+
+                // reenter the bootloader 
+                SerialPort_Write(Can.PARALLAX_BL_ACK);
+
+                 for (int i = 0; i < DEVICES; i++)
+                 {
+                     if (!_lock.WaitOne(1000))
+                     {
+                         return false;
+                     }
+                 }
+                 
+            }
+
+
+
+            return true;
+        }
+
+        private static void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            
+            _response = Encoding.ASCII.GetBytes(_serial.ReadExisting());
+            if (_response.Length<=0) return;
+            _command = _response[0];
+            
+            switch (_command)
+            {
+                case Can.PARALLAX_BL_ACK:
+                    if (_response.Length == 2)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _event.Set();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    else if (_response.Length == 1)
+                    {
+                        if (_response[0] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _event.Set();
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_VERSION:
+                    if (_response.Length == 3)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _response.CopyTo(value, 0);
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_SPEED:
+                    if (_response.Length == 2)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_ERASE:
+                    if (_response.Length == 4)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK && _response[3] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK || _response[3] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_EXECUTE:
+                    if (_response.Length == 3)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+
+                case Can.PARALLAX_BL_VERIFY:
+                    if (_response.Length == 4)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK && _response[3] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK || _response[3] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+
+                case Can.PARALLAX_BL_RESET:
+                    if (_response.Length == 3)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK )
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if(_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+
+                case Can.PARALLAX_BL_READ_KEY:
+                    if (_response.Length == 8)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _response.CopyTo(value, 0);
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    else if (_response[3] == Can.PARALLAX_BL_NACK) {
+                        _nacks++;
+                    }
+                    break;
+
+                case Can.PARALLAX_BL_WRITE_KEY:
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _nacks++;
+                        }
+                    break;
+                case Can.PARALLAX_BL_SAVE_KEYS:
+                    if (_response.Length == 4)
+                    {
+                        if (_response[1] == Can.PARALLAX_BL_ACK && _response[3] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK || _response[3] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_READ:
+                        if (_response[1] == Can.PARALLAX_BL_ACK )
+                        {
+                        _acks++;
+                        _lock.Release();
+
+                        Thread.Sleep(3000);
+                   //     _Moreresponse = Encoding.ASCII.GetBytes(_serial.ReadExisting());
+                        fileLengthBytes[0] = _response[2];
+                        fileLengthBytes[1] = _response[3];
+                        fileLengthBytes[2] = _response[4];
+                        fileLengthBytes[3] = _response[5];
+
+                        _fileLength = (uint)((fileLengthBytes[0] << 24) + (fileLengthBytes[1] << 16) + (fileLengthBytes[2] << 8) + (fileLengthBytes[3]));
+                        _fileReceived = new byte[_fileLength];
+                        _response.CopyTo(_fileReceived, 0);
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK || _response[_response.Length - 1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    break;
+                case Can.PARALLAX_BL_READ_SEGMENT:
+                    for (int i = 0; i < _response.Length; i++)
+                    {
+                        if (_fileIndex < _file.Length)
+                            _file[_fileIndex++] = _response[i];
+                    }
+                    if (_progress != null)
+                    {
+                        _progress.Report(_fileIndex / (double)_file.Length);
+                    }
+                    break;
+                case Can.PARALLAX_BL_WRITE:
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    break;
+                case Can.PARALLAX_BL_WRITE_SEGMENT:
+                        if (_response[1] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (_response[1] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    break;
+            }
+        }
+
+        private static void CAN_Bootloader()
+        {
+            if (BOARD == uint.MaxValue && NODE == uint.MaxValue)
+            {
+                BROADCAST_FLAG = Can.CanBroadcastFlag.Node;
+                BOARD = 0;
+                NODE = 0;
+            }
+            else if (BOARD != uint.MaxValue && NODE == uint.MaxValue)
+            {
+                BROADCAST_FLAG = Can.CanBroadcastFlag.Board;
+                NODE = 0;
+            }
+            else if (BOARD != uint.MaxValue && NODE != uint.MaxValue)
+            {
+                BROADCAST_FLAG = Can.CanBroadcastFlag.None;
+            }
+
+            _logger.Info("Broadcast flag is set to: {0}", Enum.GetName(typeof(Can.CanBroadcastFlag), BROADCAST_FLAG));
+
+            CanRxService.Instance.Initialize();
+            CanTxService.Instance.Initialize();
+
+            // TODO initialize can, detect bootloadable devices, configure can baud rate, etc...
+            uint baudRate = Can.BusBaudRate;
+
+            Can.Filter = false;
+
+            if (DEBUG >= 2)
+            {
+                CanRxService.Instance.LogRxFrames = true;
+                CanRxService.Instance.LogRxForeignFrames = true;
+            }
+
+            if (DEBUG >= 3)
+            {
+                CanTxService.Instance.LogTxFrames = true;
+            }
+
+            Can.GetProxy().AddListener(ProcessFrame);
+
+            CanTxService.Instance.Start();
+            CanRxService.Instance.Start();
+
+            _logger.Info("Initializing CAN bus...");
+
+            Can.BusIdType = (uint)CanAdapter.IdType.Extended;
+            Can.BusBaudRate = (uint)INITIAL_CAN_BAUD_RATE;
+
+            if (!Can.TryOpen())
+            {
+                _logger.Error("Error: Unable to open CAN bus");
+                Environment.Exit(ERROR_CAN_BUS);
+            }
+
+            Thread.Sleep(100);
+
+            if (BOOTLOAD)
+            {
+                _logger.Info("Bootloading device(s)...");
+                CAN_Bootload();
+            }
+
+            if (INTERRUPT)
+            {
+                _logger.Info("Interrupting device(s)...");
+                CAN_Interrupt();
+            }
+
+            _logger.Info("Detecting bootloadable device(s)...");
+            if (!CAN_DetectDevices())
+            {
+                _logger.Error("Error: Unable to detect device(s) in bootloader");
+                Environment.Exit(ERROR_CAN_BUS);
+            }
+            else
+            {
+                _logger.Info("Detected {0} bootloadable devices!", DEVICES);
+            }
+
+            if (DELAY == DEFAULT_DELAY)
+            {
+                DELAY = (int)Math.Ceiling(DEVICES / 4f);
+            }
+
+            // execute commands in the order they are encountered
+            int commands = 0;
+            string command;
+            bool commandResult;
+            for (int i = 0; i < _commands.Count; i++)
+            {
+                while (_lock.WaitOne(0)) ;
+
+                if (_commands[i].IndexOf("-") == 0)
+                {
+                    command = _commands[i].Substring(1).ToUpper();
+                }
+                else
+                {
+                    command = _commands[i];
+                }
+
+                commandResult = false;
+                // time each command
+                DateTime start = DateTime.Now;
+                commands++;
+
+                try
+                {
+                    if (_commands[i] == "-version")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Getting bootloader version...");
+
+                        if (commandResult = CAN_Version())
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully got bootloader version: {0}", (int)Program.value[1]));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, "Error getting bootloader version");
+                        }
+                    }
+                    else if (_commands[i] == "-speed")
+                    {
+                        // todo reconfigure baud rate
+                        Can.BootloaderCanSpeed speed;
+                        if (!TryParseEnum<Can.BootloaderCanSpeed>(_commands[++i], out speed))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Changing CAN baud rate: {0}...", Enum.GetName(typeof(Can.BootloaderCanSpeed), speed)));
+
+                        if (CAN_Speed((CanAdapter.BaudRate)speed))
+                        {
+                            LOG(LogLevel.Info, commands, command, "Reinitializing CAN bus...");
+
+                            Can.Close();
+
+                            Can.BusBaudRate = (uint)speed;
+                            if (!Can.Open())
+                            {
+                                LOG(LogLevel.Error, commands, command, "Unable to open CAN bus");
+                                Environment.Exit(ERROR_CAN_BUS);
+                            }
+
+                            LOG(LogLevel.Info, commands, command, "Waiting for device(s)...");
+
+                            Thread.Sleep(100);
+
+                            // see if we can communicate with the device at the new CAN baud rate
+                            if (commandResult = CAN_WaitForDevices(5))
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Successfully changed CAN baud rate: {0}", Enum.GetName(typeof(Can.BootloaderCanSpeed), speed)));
+                            }
+                            else
+                            {
+                                LOG(LogLevel.Error, commands, command, "Unable to detect device(s) in bootloader");
+                                Environment.Exit(ERROR_CAN_BUS);
+                            }
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Error, commands, command, "Unable to change the device(s) CAN baud rate");
+                            Environment.Exit(ERROR_CAN_BUS);
+                        }
+                    }
+                    else if (_commands[i] == "-read")
+                    {
+                        // flash region, file
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file = _commands[++i];
+                        if (File.Exists(file))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("File at specified destination will be overwritten: {0}", _commands[i]));
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Reading flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = CAN_Read(region))
+                        {
+                            try
+                            {
+                                File.WriteAllBytes(file, _file);
+                            }
+                            catch { }
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully read flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-write")
+                    {
+                        // flash region, file
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file = _commands[++i];
+                        if (!File.Exists(file))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        try
+                        {
+                            _file = File.ReadAllBytes(file);
+                        }
+                        catch
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading from file, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Writing flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = CAN_Write(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully wrote flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error writing flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-erase")
+                    {
+                        // flash region
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Erasing flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = CAN_Erase(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully erased flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error erasing flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                    }
+                    else if (_commands[i] == "-verify")
+                    {
+                        // flash region [if region = 1 | 2, verify target is the second parameter]
+                        Can.BootloaderFlashRegion region;
+                        if (!TryParseEnum<Can.BootloaderFlashRegion>(_commands[++i], out region))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string file;
+                        byte[] data;
+                        if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+                        {
+                            file = _commands[++i];
+                            if (!File.Exists(file))
+                            {
+                                if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                                continue;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    data = File.ReadAllBytes(file);
+                                }
+                                catch { }
+                            }
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Verifying flash region: {0}...", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+
+                        if (commandResult = CAN_Verify(region))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully verified flash region: {0}", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error verifying flash region: {0}k", Enum.GetName(typeof(Can.BootloaderFlashRegion), region)));
+                        }
+
+                        if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+                        {
+                            // todo verify the bootloader or user data regions - compare to data
+                        }
+                    }
+                    else if (_commands[i] == "-read-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Reading key: {0}...", Enum.GetName(typeof(Can.BootloaderKey), key)));
+
+                        if (commandResult = CAN_ReadKey(key))
+                        {
+                            string value = "";
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                value = String.Format("{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                value = String.Format("{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                value = String.Format("{0}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                value = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                value = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                value = String.Format("{0}/{1}/{2}", (uint)Program.value[2], (uint)Program.value[3], (uint)Program.value[4]);
+                            }
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully read key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error reading key: {0}", Enum.GetName(typeof(Can.BootloaderKey), key)));
+                        }
+
+                    }
+                    else if (_commands[i] == "-write-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string value = _commands[++i];
+                        // max data length, need 1 byte for key
+                        byte[] data = new byte[7];
+
+                        try
+                        {
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 16);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                // month, day, year
+                                Regex date = new Regex(@"([1-9]|[0-2])/(\d{1,2})/(\d{2})", RegexOptions.CultureInvariant);
+                                Match match = date.Match(value);
+                                if (match.Success)
+                                {
+                                    data[0] = (byte)Convert.ToUInt16(match.Groups[1].Value, 10);
+                                    data[1] = (byte)Convert.ToUInt16(match.Groups[2].Value, 10);
+                                    data[2] = (byte)Convert.ToUInt16(match.Groups[3].Value, 10);
+                                }
+                                else
+                                {
+                                    throw new Exception();
+                                }
+                                value = String.Format("{0}/{1}/{2}", (uint)data[0], (uint)data[1], (uint)data[2]);
+                            }
+                        }
+                        catch
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Writing key: {0} = {1}...", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+
+                        if (commandResult = CAN_WriteKey(key, data))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully wrote key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Error writing key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+                    }
+                    else if (_commands[i] == "-verify-key")
+                    {
+                        Can.BootloaderKey key;
+                        if (!TryParseEnum<Can.BootloaderKey>(_commands[++i], out key))
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        string value = _commands[++i];
+                        // max data length, need 1 byte for key
+                        byte[] data = new byte[7];
+
+                        try
+                        {
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 16);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                data[0] = (byte)Convert.ToUInt16(value, 10);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                BitConverter.GetBytes(Convert.ToUInt32(value, 10)).CopyTo(data, 0);
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                // month, day, year
+                                Regex date = new Regex(@"([1-9]|[0-2])/(\d{1,2})/(\d{2})", RegexOptions.CultureInvariant);
+                                Match match = date.Match(value);
+                                if (match.Success)
+                                {
+                                    data[0] = (byte)Convert.ToUInt16(match.Groups[1].Value, 10);
+                                    data[1] = (byte)Convert.ToUInt16(match.Groups[2].Value, 10);
+                                    data[2] = (byte)Convert.ToUInt16(match.Groups[3].Value, 10);
+                                }
+                                else
+                                {
+                                    throw new Exception();
+                                }
+                                value = String.Format("{0}/{1}/{2}", (uint)data[0], (uint)data[1], (uint)data[2]);
+                            }
+                        }
+                        catch
+                        {
+                            if (DEBUG > 0) LOG(LogLevel.Warn, commands, command, String.Format("Invalid parameter specified, skipping command: {0}", _commands[i]));
+                            continue;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Verifying key: {0} = {1}...", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+
+                        if (commandResult = CAN_ReadKey(key))
+                        {
+                            string response = "";
+                            if (key == Can.BootloaderKey.BOARD)
+                            {
+                                response = String.Format("0x{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.NODE)
+                            {
+                                response = String.Format("{0:X}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.REVISION)
+                            {
+                                response = String.Format("{0}", (uint)Program.value[2]);
+                            }
+                            else if (key == Can.BootloaderKey.PART_NUMBER)
+                            {
+                                response = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.SERIAL_NUMBER)
+                            {
+                                response = String.Format("{0}", BitConverter.ToUInt32(Program.value, 2));
+                            }
+                            else if (key == Can.BootloaderKey.MANUFACTURE_DATE)
+                            {
+                                response = String.Format("{0}/{1}/{2}", (uint)Program.value[2], (uint)Program.value[3], (uint)Program.value[4]);
+                            }
+
+                            if (value == response)
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Successfully verified key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                            }
+                            else
+                            {
+                                LOG(LogLevel.Info, commands, command, String.Format("Error verifying key: {0} = {1}, value = {2}", Enum.GetName(typeof(Can.BootloaderKey), key), value, response));
+                            }
+
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, String.Format("Error verifying key: {0} = {1}", Enum.GetName(typeof(Can.BootloaderKey), key), value));
+                        }
+
+                    }
+                    else if (_commands[i] == "-save")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Saving keys to flash...");
+
+                        if (commandResult = CAN_SaveKeys())
+                        {
+                            LOG(LogLevel.Info, commands, command, "Successfully saved keys to flash");
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, "Error saving keys to flash");
+                        }
+                    }
+                    //else if (_commands[i] == "-read-protect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-read-unprotect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-write-protect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    //else if (_commands[i] == "-write-unprotect")
+                    //{
+                    //	// todo flash region
+                    //}
+                    else if (_commands[i] == "-execute")
+                    {
+                        LOG(LogLevel.Info, commands, command, "Starting application...");
+
+                        if (commandResult = CAN_Execute())
+                        {
+                            LOG(LogLevel.Info, commands, command, "Application successfully started");
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Warn, commands, command, "Error starting application");
+                        }
+                    }
+                    else if (_commands[i] == "-reset")
+                    {
+                        Can.BootloaderResetType type;
+
+                        if (TryParseEnum<Can.BootloaderResetType>(_commands[i + 1], out type))
+                        {
+                            i++;
+                        }
+                        else
+                        {
+                            type = Can.BootloaderResetType.PARALLAX;
+                        }
+
+                        LOG(LogLevel.Info, commands, command, String.Format("Resetting device(s): {0}...", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+
+                        if (commandResult = CAN_Reset(type))
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Successfully reset device(s): {0}", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+                        }
+                        else
+                        {
+                            LOG(LogLevel.Info, commands, command, String.Format("Error resetting device(s): {0}", Enum.GetName(typeof(Can.BootloaderResetType), type)));
+                        }
+                    }
+                    else if (_commands[i] == "-sleep")
+                    {
+                        int duration = int.Parse(_commands[i + 1]);
+                        i++;
+                        commandResult = true;
+                        LOG(LogLevel.Info, commands, command, String.Format("Sleeping for {0} ms...", duration));
+                        Thread.Sleep(duration);
+                    }
+                    else
+                    {
+                        _logger.Warn("Unrecognized command at index [{0}]: {1}", i, command);
+                        commands--;
+                        continue;
+                    }
+                    // output duration command took to execute
+                    TimeSpan timeSpan = DateTime.Now.Subtract(start);
+                    LOG(LogLevel.Info, commands, command, String.Format("Command processed in {0}", timeSpan.ToString()));
+
+                    if (commandResult) _exitCode++;
+                }
+                catch
+                {
+                    if (DEBUG > 0) LOG(LogLevel.Warn, command, String.Format("Insufficient parameters specified for command at index [{0}], skipping command", i));
+                    commands--;
+                    continue;
+                }
+            }
+
+            if (DEBUG > 0)
+            {
+                _logger.Info("CAN frames received: {0}", _frames.Count);
+                _logger.Info("Acks: {0}", _acks);
+                _logger.Info("Nacks: {0}", _nacks);
+            }
+        }
+
+        // detect how many devices we are working with in bootloader mode
+        private static bool CAN_DetectDevices()
+        {
+            TxFrame(Can.PARALLAX_BL_ACK);
+
+            Thread.Sleep(1000);
+
+            // unique responses are stored in NODES dictionary
+            if (FORCE_DETECT)
+            {
+                DEVICES = _acks;
+            }
+            else
+            {
+                DEVICES = NODES.Count;
+            }
+
+            return DEVICES > 0;
+        }
+
+        // wait for all devices to be ready
+        private static bool CAN_WaitForDevices(int attempts)
+        {
+            int attempt = 0;
+
+            do
+            {
+                while (_lock.WaitOne(0)) ;
+
+                TxFrame(Can.PARALLAX_BL_ACK);
+
+                bool rc = true;
+
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(1000))
+                    {
+                        rc = false;
+                        break;
+                    }
+                }
+
+                if (rc) return true;
+            } while (attempt++ < attempts);
+
+            return false;
+        }
+
+        private static bool CAN_Bootload()
+        {
+            TxFrame(Can.CAN_BOOTLOADER);
+
+            Thread.Sleep(250);
+
+            return true;
+        }
+
+        private static bool CAN_Interrupt()
+        {
+            TxFrame(Can.PARALLAX_BL_NACK);
+
+            Thread.Sleep(100);
+
+            return true;
+        }
+
+        private static bool CAN_Version()
+        {
+            TxFrame(Can.PARALLAX_BL_VERSION);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_Speed(CanAdapter.BaudRate baudRate)
+        {
+            byte[] data = new byte[1];
+            if (baudRate == CanAdapter.BaudRate._125_Kbps) data[0] = (byte)Can.BootloaderCanSpeed._125_KBPS;
+            else if (baudRate == CanAdapter.BaudRate._250_Kbps) data[0] = (byte)Can.BootloaderCanSpeed._250_KBPS;
+            else if (baudRate == CanAdapter.BaudRate._500_Kbps) data[0] = (byte)Can.BootloaderCanSpeed._500_KBPS;
+            else if (baudRate == CanAdapter.BaudRate._1000_Kbps) data[0] = (byte)Can.BootloaderCanSpeed._1000_KBPS;
+            else return false;
+
+            TxFrame(Can.PARALLAX_BL_SPEED, data, 1);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_Erase(Can.BootloaderFlashRegion region)
+        {
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+            {
+                return false;
+            }
+            else
+            {
+                TxFrame(Can.PARALLAX_BL_ERASE, new byte[] { (byte)region }, 1);
+            }
+
+            // command ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            // erase operation ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(30000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_Read(Can.BootloaderFlashRegion region)
+        {
+            // read to memory, command processor will write to file if successful
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+            {
+                _file = new byte[Can.FLASH_BOOTLOADER_SIZE];
+            }
+            if (region == Can.BootloaderFlashRegion.USER_DATA)
+            {
+                _file = new byte[Can.FLASH_USER_DATA_SIZE];
+            }
+            else if (region == Can.BootloaderFlashRegion.APPLICATION)
+            {
+                _file = new byte[Can.FLASH_APPLICATION_SIZE];
+            }
+
+            for (int i = 0; i < _file.Length; i++)
+            {
+                _file[i] = 0xFF;
+            }
+
+            Console.Write("Status: ");
+            _progress = new ProgressBar();
+            _progress.Report(0);
+
+            TxFrame(Can.PARALLAX_BL_READ, new byte[] { (byte)region }, 1);
+
+            // command ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    _progress.Dispose();
+                    _progress = null;
+                    Console.WriteLine("Failed!");
+                    return false;
+                }
+            }
+
+            // read operation ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(60000))
+                {
+                    _progress.Dispose();
+                    _progress = null;
+                    Console.WriteLine("Failed!");
+                    return false;
+                }
+            }
+
+            _progress.Report(1);
+            Thread.Sleep(250);
+
+            _progress.Dispose();
+            _progress = null;
+            Console.WriteLine("Success!");
+
+            return true;
+        }
+
+        private static bool CAN_Write(Can.BootloaderFlashRegion region)
+        {
+            uint length = (uint)_file.Length;
+            uint chunk;
+            uint index = 0;
+            byte[] data = new byte[8];
+            uint dlc = 8;
+
+            Console.Write("Status: ");
+            ProgressBar progressBar = new ProgressBar();
+
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER)
+            {
+                return false;
+            }
+            else
+            {
+                data[0] = (byte)region;
+                BitConverter.GetBytes(_file.Length).ToArray().CopyTo(data, 1);
+                TxFrame(Can.PARALLAX_BL_WRITE, data, 5);
+            }
+
+            // command ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            while (length > 0)
+            {
+                chunk = Math.Min(Can.PARALLAX_BL_SEGMENT_SIZE, length);
+                length -= chunk;
+
+                while (chunk > 0)
+                {
+                    dlc = Math.Min(8, chunk);
+                    Array.Copy(_file, index, data, 0, dlc);
+                    TxFrame(Can.PARALLAX_BL_WRITE_SEGMENT, data, dlc);
+                    index += dlc;
+                    chunk -= dlc;
+
+                    progressBar.Report((double)(_file.Length - (length + chunk)) / _file.Length);
+
+                    Thread.Sleep(DELAY);
+                }
+
+                // ack for receiving segment
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(1000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+
+                // ack for writing segment
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(5000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+            }
+
+            progressBar.Report((double)_file.Length / (double)_file.Length);
+
+            Thread.Sleep(100);
+
+            // ack for successful write command
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    progressBar.Dispose();
+                    Console.WriteLine("Failed!");
+                    return false;
+                }
+            }
+
+            if (region == Can.BootloaderFlashRegion.APPLICATION)
+            {
+                // ack for application verification
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(15000))
+                    {
+                        progressBar.Dispose();
+                        Console.WriteLine("Failed!");
+                        return false;
+                    }
+                }
+            }
+
+            progressBar.Dispose();
+            Console.WriteLine("Success!");
+
+            return true;
+        }
+
+        private static bool CAN_Verify(Can.BootloaderFlashRegion region)
+        {
+            if (region == Can.BootloaderFlashRegion.BOOTLOADER || region == Can.BootloaderFlashRegion.USER_DATA)
+            {
+                // do a pseudo verify - read the desired region and do a compare against a buffer
+                return CAN_Read(region);
+            }
+            else
+            {
+                TxFrame(Can.PARALLAX_BL_VERIFY);
+            }
+
+            // command ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            // verify ack
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(15000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_Execute()
+        {
+            TxFrame(Can.PARALLAX_BL_EXECUTE);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_ReadKey(Can.BootloaderKey key)
+        {
+            TxFrame(Can.PARALLAX_BL_READ_KEY, new byte[] { (byte)key }, 1);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_WriteKey(Can.BootloaderKey key, byte[] value)
+        {
+            byte[] data = new byte[8];
+            data[0] = (byte)key;
+            value.CopyTo(data, 1);
+
+            TxFrame(Can.PARALLAX_BL_WRITE_KEY, data, 8);
+
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_SaveKeys()
+        {
+            TxFrame(Can.PARALLAX_BL_SAVE_KEYS);
+
+            // ack for command
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            // ack for writing keys to flash
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool CAN_Reset(Can.BootloaderResetType type)
+        {
+            TxFrame(Can.PARALLAX_BL_RESET, new byte[] { (byte)type }, 1);
+
+            // ack for reset
+            for (int i = 0; i < DEVICES; i++)
+            {
+                if (!_lock.WaitOne(1000))
+                {
+                    return false;
+                }
+            }
+
+            if (type == Can.BootloaderResetType.PARALLAX)
+            {
+                Thread.Sleep(1000);
+
+                // reenter the bootloader in CAN mode
+                TxFrame(Can.PARALLAX_BL_ACK);
+
+                // ack for bootloader
+                for (int i = 0; i < DEVICES; i++)
+                {
+                    if (!_lock.WaitOne(1000))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        private static void TxFrame(uint command, byte[] data = null, uint length = 0)
+        {
+            CanTxService.Instance.TxCommand(Can.COMMAND_TYPE_REQUEST, command, BOARD, NODE, 0, 0, (uint)BROADCAST_FLAG, Can.CAN_PRIORITY_VERY_HIGH, data, length, null);
+            CanTxService.Instance.Synchronize(1000);
+        }
+
+        private static void ProcessFrame(CanFrame frame)
+        {
+            _frames.Insert(0, frame);
+
+            if (DEBUG >= 2) _logger.Info("RX CAN Frame: [ID = {0:X} | Source [Board = {1:X}, Node = {2}] | Destination [Board = {3:X}, Node = {4}] | Command Type = {5} | Command = {6:X} | Broadcast Flag = {7:X} | Priority = {8:X}] => {9:X}", frame.ID, _sourceBoard, _sourceNode, _destinationBoard, _destinationNode, _commandType, _command, _broadcastFlag, _priority, BitConverter.ToString(frame.Data));
+
+            _commandType = (frame.ID >> 0) & Can.COMMAND_TYPE_MASK;
+            _command = (frame.ID >> 1) & Can.COMMAND_MASK;
+            _destination = (frame.ID >> 9) & Can.ADDRESS_MASK;
+            _destinationBoard = (frame.ID >> 9) & Can.ADDRESS_BOARD_MASK;
+            _destinationNode = (frame.ID >> 13) & Can.ADDRESS_NODE_MASK;
+            _source = (frame.ID >> 17) & Can.ADDRESS_MASK;
+            _sourceBoard = (frame.ID >> 17) & Can.ADDRESS_BOARD_MASK;
+            _sourceNode = (frame.ID >> 21) & Can.ADDRESS_NODE_MASK;
+            _broadcastFlag = (frame.ID >> 25) & Can.BROADCAST_MASK;
+            _priority = (frame.ID >> 27) & Can.PRIORITY_MASK;
+
+            switch (_command)
+            {
+                case Can.PARALLAX_BL_ACK:
+                    {
+                        if (frame.DataLengthCode == 1)
+                        {
+                            if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                            {
+                                if (!NODES.ContainsKey(_source))
+                                {
+                                    NODES.Add(_source, true);
+                                }
+                                _acks++;
+                                _lock.Release();
+                            }
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_VERSION:
+                    if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _acks++;
+                        frame.Data.CopyTo(value, 1);
+                        _lock.Release();
+                    }
+                    else if (frame.Data[0] == Can.PARALLAX_BL_NACK)
+                    {
+                        _nacks++;
+                    }
+                    break;
+                case Can.PARALLAX_BL_READ:
+                    if (frame.DataLengthCode == 1)
+                    {
+                        if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_READ_SEGMENT:
+                    for (int i = 0; i < frame.DataLengthCode; i++)
+                    {
+                        if (_fileIndex < _file.Length)
+                        {
+                            _file[_fileIndex++] = frame.Data[i];
+                        }
+                    }
+                    if (_progress != null)
+                    {
+                        _progress.Report(_fileIndex / (double)_file.Length);
+                    }
+                    break;
+                case Can.PARALLAX_BL_WRITE:
+                    if (frame.DataLengthCode == 1)
+                    {
+                        if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                        {
+                            _acks++;
+                            _lock.Release();
+                        }
+                        else if (frame.Data[0] == Can.PARALLAX_BL_NACK)
+                        {
+                            _nacks++;
+                        }
+                    }
+                    break;
+                case Can.PARALLAX_BL_WRITE_SEGMENT:
+                    if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _acks++;
+                        _lock.Release();
+                    }
+                    else if (frame.Data[0] == Can.PARALLAX_BL_NACK)
+                    {
+                        _nacks++;
+                    }
+                    break;
+                case Can.PARALLAX_BL_READ_KEY:
+                    if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _acks++;
+                        frame.Data.CopyTo(value, 0);
+                        _lock.Release();
+                    }
+                    else if (frame.Data[0] == Can.PARALLAX_BL_NACK)
+                    {
+                        _nacks++;
+                    }
+                    break;
+                case Can.PARALLAX_BL_WRITE_KEY:
+                    if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _acks++;
+                        _lock.Release();
+                    }
+                    else if (frame.Data[0] == Can.PARALLAX_BL_NACK)
+                    {
+                        _nacks++;
+                    }
+                    break;
+                case Can.CAN_BOOTLOADER:
+                    _acks++;
+                    _lock.Release();
+                    break;
+                default:
+                    if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _acks++;
+                        _lock.Release();
+                    }
+                    else if (frame.Data[0] == Can.PARALLAX_BL_ACK)
+                    {
+                        _nacks++;
+                    }
+                    break;
+            }
+        }
+
+        private static void LOG(LogLevel level, string command, string message)
+        {
+            _logger.Log(level, String.Format("{0}: {1}", command, message));
+        }
+
+        private static void LOG(LogLevel level, int index, string command, string message)
+        {
+            _logger.Log(level, String.Format("[{0}] {1}: {2}", index, command, message));
+        }
+
+        public static bool TryParseEnum<EnumType>(string value, out EnumType parsed, int fromBase = 10)
+        {
+            parsed = default(EnumType);
+            try
+            {
+                int converted = Convert.ToInt32(value, fromBase);
+                return TryParseEnum<EnumType>(converted, out parsed);
+            }
+            catch
+            {
+                return false;
+            }
+
+        }
+
+        public static bool TryParseEnum<EnumType>(int value, out EnumType parsed)
+        {
+            parsed = default(EnumType);
+            bool success = Enum.IsDefined(typeof(EnumType), value);
+            if (success)
+            {
+                parsed = (EnumType)Enum.ToObject(typeof(EnumType), value);
+            }
+            return success;
+        }
+    }
+}

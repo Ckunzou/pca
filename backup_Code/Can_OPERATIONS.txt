@@ -1,0 +1,24 @@
+Console.WriteLine("* Miscillaneous Commands *");
+					Console.WriteLine("-version: Get the version of the bootloader");
+					Console.WriteLine("-speed [baud rate]: Change the speed of the interface being utilized (default: CAN = 500 kbps, USART = 115200 bps)");
+					Console.WriteLine("-reset [reset type]: Reset the bootloader into the specified mode");
+					Console.WriteLine("-sleep [duration]: Put the bootloader command sequencer to sleep for the specified duration in ms");
+					Console.WriteLine("--- Bootloader Command Definitions ---");
+					Console.WriteLine("Interfaces: 1 = CAN, 2 = USART");
+					Console.WriteLine("USART Bootloader Speeds: 1 = 921600 bps, 2 = 460800 bps, 3 = 230400 bps, 4 = 115200 bps");
+					Console.WriteLine("CAN Bootloader Speeds: 1 = 1000 kbps, 2 = 500 kbps, 3 = 250 kbps, 4 = 125 kbps");
+					Console.WriteLine("Flash Regions: 1 = Bootloader, 2 = User Data, 3 = Application");
+					Console.WriteLine("Reset Types: 1 = Parallax Bootloader, 2 = STM32 Bootloader");
+					Console.WriteLine("Keys: 1 = Board (uint8, base 16), 2 = Node (uint8), 3 = Revision (uint8), 4 = Part Number (uint32), 5 = Serial Number (uint32), 6 = Manufacture Date (uint8:month/uint8:day/uint8:year)");
+
+Console.WriteLine("* General Flash Commands *");
+					Console.WriteLine("-read [flash region] [file]: Read the specified flash region and write the contents to the file");
+					Console.WriteLine("-write [flash region] [file]: Write the contents of the file to the specified flash region");
+					Console.WriteLine("-erase [flash region]: Erase the specified flash region");
+					Console.WriteLine("-verify [flash region]: Verify the contents of the specified flash region");
+					Console.WriteLine("-execute: Reset and attempt to execute the application");
+					Console.WriteLine("* User Key Flash Commands *");
+					Console.WriteLine("-read-key [key]: Reads the desired key from memory");
+					Console.WriteLine("-write-key [key] [value]: Write the value for the desired key to memory");
+					Console.WriteLine("-verify-key [key] [value]: Reads the desired key from memory and verifies it against the specified value");
+					Console.WriteLine("-save: Write the keys from memory to flash");

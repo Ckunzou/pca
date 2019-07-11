@@ -1,0 +1,2 @@
+-interface 1 "COM4"  -version -speed 4  -write-key 4 3 -read-key 4 -save -read 2 test.txt -write 3 test.txt -erase 2
+commands - 6/21
