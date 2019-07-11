@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workingSetManager>
+<workingSet editPageId="org.eclipse.ui.resourceWorkingSetPage" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1527602700847_0" label="ActiveProject" name="ActiveProject">
+<item factoryID="org.eclipse.ui.internal.model.ResourceFactory" path="/parallax-bootloader" type="4"/>
+</workingSet>
+<workingSet aggregate="true" factoryID="org.eclipse.ui.internal.WorkingSetFactory" id="1527602705705_1" label="Window Working Set" name="Aggregate for window 1527602705705">
+<workingSet IMemento.internal.id="ActiveProject"/>
+</workingSet>
+</workingSetManager>

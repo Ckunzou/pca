@@ -1,0 +1,26 @@
+################################################################################
+# Automatically-generated file. Do not edit!
+################################################################################
+
+C_FILES += "..\SoftwarePlatform\services\sysutils\src\sysutils.c"
+OBJ_FILES += "SoftwarePlatform\services\sysutils\src\sysutils.obj"
+"SoftwarePlatform\services\sysutils\src\sysutils.obj" : "..\SoftwarePlatform\services\sysutils\src\sysutils.c" "SoftwarePlatform\services\sysutils\src\.sysutils.obj.opt"
+	@echo Compiling ${<F}
+	@"${PRODDIR}\bin\ccarm" -f "SoftwarePlatform\services\sysutils\src\.sysutils.obj.opt"
+
+"SoftwarePlatform\services\sysutils\src\.sysutils.obj.opt" : .refresh
+	@argfile "SoftwarePlatform\services\sysutils\src\.sysutils.obj.opt" -o "SoftwarePlatform\services\sysutils\src\sysutils.obj" "..\SoftwarePlatform\services\sysutils\src\sysutils.c" -Cstm32f407ve --processors="C:\Program Files (x86)\TASKING\carm v5.2r1\eclipse\plugins\com.tasking.arm.vendors.stm32_1.37.0.0\etc\processors.xml" -t -Wa-gAHLs -Wa--error-limit=42 -DSTM32F40_41xxx -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader\PinMapper" --language=-gcc,-volatile,+strings,-kanji --fpu=FPv4-sp -O0 --tradeoff=4 -g --source -DNDEBUG -I"../PinMapper" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/services/sysutils/include" -D__SWPLATFORM__ -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/Configuration" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/CoreSupport" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/DeviceSupport/ST/STM32F4xx" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/include" -DSTM32F4XX=1 -DUSE_STDPERIPH_DRIVER=1 -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/stm32f4xx_stdperiph_driver/inc" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/services/sysutils/include" --global-type-checking -c --dep-file="SoftwarePlatform\services\sysutils\src\.sysutils.obj.d" -Wc--make-target="SoftwarePlatform\services\sysutils\src\sysutils.obj"
+DEPENDENCY_FILES += "SoftwarePlatform\services\sysutils\src\.sysutils.obj.d"
+
+C_FILES += "..\SoftwarePlatform\services\sysutils\src\util_string.c"
+OBJ_FILES += "SoftwarePlatform\services\sysutils\src\util_string.obj"
+"SoftwarePlatform\services\sysutils\src\util_string.obj" : "..\SoftwarePlatform\services\sysutils\src\util_string.c" "SoftwarePlatform\services\sysutils\src\.util_string.obj.opt"
+	@echo Compiling ${<F}
+	@"${PRODDIR}\bin\ccarm" -f "SoftwarePlatform\services\sysutils\src\.util_string.obj.opt"
+
+"SoftwarePlatform\services\sysutils\src\.util_string.obj.opt" : .refresh
+	@argfile "SoftwarePlatform\services\sysutils\src\.util_string.obj.opt" -o "SoftwarePlatform\services\sysutils\src\util_string.obj" "..\SoftwarePlatform\services\sysutils\src\util_string.c" -Cstm32f407ve --processors="C:\Program Files (x86)\TASKING\carm v5.2r1\eclipse\plugins\com.tasking.arm.vendors.stm32_1.37.0.0\etc\processors.xml" -t -Wa-gAHLs -Wa--error-limit=42 -DSTM32F40_41xxx -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader\PinMapper" --language=-gcc,-volatile,+strings,-kanji --fpu=FPv4-sp -O0 --tradeoff=4 -g --source -DNDEBUG -I"../PinMapper" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/services/sysutils/include" -D__SWPLATFORM__ -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/Configuration" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/CoreSupport" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/DeviceSupport/ST/STM32F4xx" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/include" -DSTM32F4XX=1 -DUSE_STDPERIPH_DRIVER=1 -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/stm32f4xx_stdperiph_driver/inc" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/services/sysutils/include" --global-type-checking -c --dep-file="SoftwarePlatform\services\sysutils\src\.util_string.obj.d" -Wc--make-target="SoftwarePlatform\services\sysutils\src\util_string.obj"
+DEPENDENCY_FILES += "SoftwarePlatform\services\sysutils\src\.util_string.obj.d"
+
+
+GENERATED_FILES += "SoftwarePlatform\services\sysutils\src\sysutils.obj" "SoftwarePlatform\services\sysutils\src\.sysutils.obj.opt" "SoftwarePlatform\services\sysutils\src\.sysutils.obj.d" "SoftwarePlatform\services\sysutils\src\sysutils.src" "SoftwarePlatform\services\sysutils\src\sysutils.lst" "SoftwarePlatform\services\sysutils\src\util_string.obj" "SoftwarePlatform\services\sysutils\src\.util_string.obj.opt" "SoftwarePlatform\services\sysutils\src\.util_string.obj.d" "SoftwarePlatform\services\sysutils\src\util_string.src" "SoftwarePlatform\services\sysutils\src\util_string.lst"

@@ -1,0 +1,435 @@
+
+**** Build of configuration Debug for project parallax-firmware ****
+
+"C:\\Program Files (x86)\\TASKING\\carm v5.2r1\\bin\\amk" -j4 all -a 
+Compiling tm_stm32f4_gpio.c
+Compiling tm_stm32f4_rtc.c
+Compiling tm_stm32f4_spi.c
+Compiling tm_stm32f4_watchdog.c
+Compiling stm32_chip_config.c
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_gpio.c" 70/14] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_gpio.c" 201/14] possible truncation at implicit conversion to type "unsigned char"
+0 errors, 2 warnings
+Compiling __framework_init.c
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_spi.h" 468/13] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_spi.c" 227/13] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_spi.c" 269/13] possible truncation at implicit conversion to type "unsigned char"
+0 errors, 3 warnings
+Compiling per_stm32f4xx_can_cfg_instance.c
+carm W560: ["..\lib\tm_stm32f4\tm_stm32f4_rtc.c" 303/19] possible truncation at implicit conversion to type "unsigned short int"
+carm W507: ["..\lib\tm_stm32f4\tm_stm32f4_rtc.c" 443/24] variable "int_val" is possibly uninitialized
+0 errors, 2 warnings
+Compiling per_stm32f4xx_dma_cfg_instance.c
+Compiling per_stm32f4xx_gpio_cfg_instance.c
+Compiling per_stm32f4xx_iwdg_cfg_instance.c
+Compiling per_stm32f4xx_rcc_cfg_instance.c
+Compiling per_stm32f4xx_rtc_cfg_instance.c
+Compiling per_stm32f4xx_spi_cfg_instance.c
+Compiling per_stm32f4xx_usart_cfg_instance.c
+Compiling per_stm32f4xx_wwdg_cfg_instance.c
+Compiling cstart.c
+Compiling init_memory.c
+Compiling pal_cortex.c
+Compiling pal_cortex_interrupts.c
+Compiling pal_cortex_interrupts_m0.c
+Compiling pal_cortex_posix.c
+Compiling system_stm32f4xx.c
+asarm W230: ["SoftwarePlatform\platform\discrete\processors\cortex\src\pal_cortex.src" 1015] potential triggering of silicon bug 752419/752770
+asarm W230: ["SoftwarePlatform\platform\discrete\processors\cortex\src\pal_cortex.src" 1085] potential triggering of silicon bug 752419/752770
+asarm W230: ["SoftwarePlatform\platform\discrete\processors\cortex\src\pal_cortex.src" 1096] potential triggering of silicon bug 752419/752770
+Compiling misc.c
+asarm W230: ["SoftwarePlatform\platform\discrete\processors\cortex\src\pal_cortex_interrupts.src" 376] potential triggering of silicon bug 752419/752770
+asarm W230: ["SoftwarePlatform\platform\discrete\processors\cortex\src\pal_cortex_interrupts.src" 389] potential triggering of silicon bug 752419/752770
+Compiling stm32f4xx_adc.c
+Compiling stm32f4xx_can.c
+Compiling stm32f4xx_cec.c
+Compiling stm32f4xx_crc.c
+Compiling stm32f4xx_cryp.c
+Compiling stm32f4xx_cryp_aes.c
+Compiling stm32f4xx_cryp_des.c
+Compiling stm32f4xx_cryp_tdes.c
+Compiling stm32f4xx_dac.c
+Compiling stm32f4xx_dbgmcu.c
+Compiling stm32f4xx_dcmi.c
+Compiling stm32f4xx_dma.c
+Compiling stm32f4xx_dma2d.c
+Compiling stm32f4xx_exti.c
+Compiling stm32f4xx_flash.c
+Compiling stm32f4xx_flash_ramfunc.c
+Compiling stm32f4xx_fmc.c
+Compiling stm32f4xx_fmpi2c.c
+Compiling stm32f4xx_fsmc.c
+Compiling stm32f4xx_gpio.c
+Compiling stm32f4xx_hash.c
+Compiling stm32f4xx_hash_md5.c
+Compiling stm32f4xx_hash_sha1.c
+Compiling stm32f4xx_i2c.c
+Compiling stm32f4xx_iwdg.c
+Compiling stm32f4xx_ltdc.c
+Compiling stm32f4xx_pwr.c
+Compiling stm32f4xx_qspi.c
+Compiling stm32f4xx_rcc.c
+Compiling stm32f4xx_rng.c
+Compiling stm32f4xx_rtc.c
+Compiling stm32f4xx_sai.c
+Compiling stm32f4xx_sdio.c
+Compiling stm32f4xx_spdifrx.c
+Compiling stm32f4xx_spi.c
+Compiling stm32f4xx_syscfg.c
+Compiling stm32f4xx_tim.c
+Compiling stm32f4xx_usart.c
+Compiling stm32f4xx_wwdg.c
+Compiling pal_arch_cortex_variant.c
+Compiling pal_init.c
+Compiling pal_timers.c
+Compiling pal_timing.c
+Compiling interrupts.c
+Compiling timers.c
+Compiling timing.c
+Compiling perror.c
+Compiling strerror.c
+Compiling mq_close.c
+Compiling mq_getattr.c
+Compiling mq_notify.c
+Compiling mq_open.c
+Compiling mq_receive.c
+Compiling mq_send.c
+Compiling mq_setattr.c
+Compiling mq_timedreceive.c
+Compiling mq_timedsend.c
+Compiling mq_unlink.c
+Compiling posix_mqueue.c
+Compiling abort.c
+Compiling alarm.c
+Compiling kill.c
+Compiling pause.c
+Compiling posix_signal.c
+Compiling pthread_kill.c
+Compiling pthread_sigmask.c
+Compiling raise.c
+Compiling sigaction.c
+Compiling sigaddset.c
+Compiling sigdelset.c
+Compiling sigemptyset.c
+Compiling sigfillset.c
+Compiling sigismember.c
+Compiling signal.c
+Compiling sigpending.c
+Compiling sigprocmask.c
+Compiling sigqueue.c
+Compiling sigsuspend.c
+Compiling sigtimedwait.c
+Compiling sigwait.c
+Compiling sigwaitinfo.c
+Compiling clock_getres.c
+Compiling clock_gettime.c
+Compiling clock_nanosleep.c
+Compiling clock_settime.c
+Compiling hal.c
+Compiling k_kernel.c
+Compiling k_readyqueue.c
+Compiling k_schedule.c
+Compiling malloc.c
+Compiling memlock.c
+Compiling nanosleep.c
+Compiling posix_asr.c
+Compiling posix_clock_handler.c
+Compiling posix_daemon_threads.c
+Compiling posix_main.c
+Compiling posix_mainhook.c
+Compiling posix_pthread.c
+Compiling posix_time.c
+Compiling pthread_attr_destroy.c
+Compiling pthread_attr_getdetachstate.c
+Compiling pthread_attr_getguardsize.c
+Compiling pthread_attr_getinheritsched.c
+Compiling pthread_attr_getname.c
+Compiling pthread_attr_getschedparam.c
+Compiling pthread_attr_getschedpolicy.c
+Compiling pthread_attr_getscope.c
+Compiling pthread_attr_getstack.c
+Compiling pthread_attr_getstackaddr.c
+Compiling pthread_attr_getstacksize.c
+Compiling pthread_attr_init.c
+Compiling pthread_attr_setdetachstate.c
+Compiling pthread_attr_setguardsize.c
+Compiling pthread_attr_setinheritsched.c
+Compiling pthread_attr_setname.c
+Compiling pthread_attr_setschedparam.c
+Compiling pthread_attr_setschedpolicy.c
+Compiling pthread_attr_setscope.c
+Compiling pthread_attr_setstack.c
+Compiling pthread_attr_setstackaddr.c
+Compiling pthread_attr_setstacksize.c
+Compiling pthread_cancel.c
+Compiling pthread_cleanup_pop.c
+Compiling pthread_cleanup_push.c
+Compiling pthread_cond_broadcast.c
+Compiling pthread_cond_destroy.c
+Compiling pthread_cond_init.c
+Compiling pthread_cond_signal.c
+Compiling pthread_cond_timedwait.c
+Compiling pthread_cond_wait.c
+Compiling pthread_condattr_destroy.c
+Compiling pthread_condattr_getclock.c
+Compiling pthread_condattr_init.c
+Compiling pthread_condattr_setclock.c
+Compiling pthread_create.c
+Compiling pthread_detach.c
+Compiling pthread_equal.c
+Compiling pthread_exit.c
+Compiling pthread_getconcurrency.c
+Compiling pthread_getcpuclockid.c
+Compiling pthread_getschedparam.c
+Compiling pthread_getspecific.c
+Compiling pthread_join.c
+Compiling pthread_key_create.c
+Compiling pthread_key_delete.c
+Compiling pthread_mutex_destroy.c
+Compiling pthread_mutex_getprioceiling.c
+Compiling pthread_mutex_init.c
+Compiling pthread_mutex_lock.c
+Compiling pthread_mutex_setprioceiling.c
+Compiling pthread_mutex_timedlock.c
+Compiling pthread_mutex_trylock.c
+Compiling pthread_mutex_unlock.c
+Compiling pthread_mutexattr_destroy.c
+Compiling pthread_mutexattr_getprioceiling.c
+Compiling pthread_mutexattr_getprotocol.c
+Compiling pthread_mutexattr_gettype.c
+Compiling pthread_mutexattr_init.c
+Compiling pthread_mutexattr_setprioceiling.c
+Compiling pthread_mutexattr_setprotocol.c
+Compiling pthread_mutexattr_settype.c
+Compiling pthread_once.c
+Compiling pthread_self.c
+Compiling pthread_sem_destroy.c
+Compiling pthread_sem_getvalue.c
+Compiling pthread_sem_init.c
+Compiling pthread_sem_open.c
+Compiling pthread_sem_post.c
+Compiling pthread_sem_timedwait.c
+Compiling pthread_sem_trywait.c
+Compiling pthread_sem_wait.c
+Compiling pthread_setcancelstate.c
+Compiling pthread_setcanceltype.c
+Compiling pthread_setconcurrency.c
+Compiling pthread_setschedparam.c
+Compiling pthread_setschedprio.c
+Compiling pthread_setspecific.c
+Compiling pthread_testcancel.c
+Compiling sched_get_priority_max.c
+Compiling sched_get_priority_min.c
+Compiling sched_getparam.c
+Compiling sched_getscheduler.c
+Compiling sched_rr_get_interval.c
+Compiling sched_setparam.c
+Compiling sched_yield.c
+Compiling synchronized.c
+Compiling sysconf.c
+Compiling timer_create.c
+Compiling timer_delete.c
+Compiling timer_getoverrun.c
+Compiling timer_gettime.c
+Compiling timer_settime.c
+Compiling strptime.c
+Compiling sysutils.c
+Compiling util_string.c
+Compiling can_common.c
+Compiling main.c
+Compiling utilities.c
+Compiling bootloader_common.c
+Compiling external_node.c
+Compiling internal_rtd_node.c
+Compiling power_supply_node.c
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\rtd.h" 39/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\rtd.h" 40/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\rtd.h" 41/14] unused variable "_rtd"
+carm W537: ["..\src\bsp\support\rtd.h" 43/20] unused variable "CALIBRATION_DATA"
+0 errors, 9 warnings
+Compiling rf_load_node.c
+carm W560: ["..\src\bsp\power_supply_node.c" 341/35] possible truncation at implicit conversion to type "unsigned char"
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\tsc102.h" 35/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\tsc102.h" 36/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\tsc102.h" 38/14] unused variable "_vref"
+carm W536: ["..\src\bsp\power_supply_node.c" 504/13] unused static function "system_check"
+0 errors, 10 warnings
+Compiling rf_phase_node.c
+carm W560: ["C:\Users\jzou\workspace_arm_v5.2r1\parallax-firmware\lib\tm_stm32f4\tm_stm32f4_spi.h" 468/13] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\main.h" 187/75] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\main.h" 191/75] possible truncation at implicit conversion to type "unsigned char"
+carm W525: ["..\src\main.c" 95/10] discarded 'volatile' qualifier at argument #1
+carm W560: ["..\src\main.c" 270/9] possible truncation at implicit conversion to type "unsigned char"
+carm W525: ["..\src\main.c" 622/68] discarded 'volatile' qualifier at argument #2
+carm W544: ["..\src\main.c" 640/20] unreachable code
+carm W525: ["..\src\main.c" 674/49] discarded 'volatile' qualifier at argument #2
+carm W544: ["..\src\main.c" 686/20] unreachable code
+carm W525: ["..\src\main.c" 720/49] discarded 'volatile' qualifier at argument #2
+carm W544: ["..\src\main.c" 742/20] unreachable code
+carm W525: ["..\src\main.c" 943/60] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 943/65] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\main.c" 969/41] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 986/41] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 1080/23] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 1221/24] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 1232/23] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 1246/12] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\main.c" 1264/12] discarded 'volatile' qualifier at argument #1
+carm W560: ["..\src\main.c" 1475/18] possible truncation at implicit conversion to type "unsigned char"
+carm W537: ["..\src\bsp\support\mx25l3206e.h" 61/22] unused variable "_spi"
+carm W537: ["..\src\bsp\support\mx25l3206e.h" 62/23] unused variable "_port"
+carm W537: ["..\src\bsp\support\mx25l3206e.h" 63/17] unused variable "_pin"
+carm W537: ["..\src\bsp\support\mx25l3206e.h" 65/16] unused variable "_status"
+carm W537: ["..\src\main.h" 93/21] unused variable "_if_usart"
+carm W537: ["..\src\main.h" 94/21] unused variable "_if_can1"
+carm W537: ["..\src\main.h" 95/21] unused variable "_if_can2"
+carm W537: ["..\src\main.h" 107/26] unused variable "_adc_dma_buffer"
+carm W537: ["..\src\main.h" 113/46] unused variable "_contextDma"
+carm W536: ["..\src\main.c" 818/13] unused static function "log_can_1_frame"
+carm W537: ["..\src\main.c" 453/18] unused variable "DMA_InitStructure"
+carm W529: ["..\src\main.h" 191/9] overflow in constant expression of type "signed int"
+carm W507: ["..\src\main.c" 411/48] variable "handler" is possibly uninitialized
+carm W507: ["..\src\main.c" 411/39] variable "context" is possibly uninitialized
+carm W507: ["..\src\main.c" 411/26] variable "CAN_RX_IRQn" is possibly uninitialized
+0 errors, 36 warnings
+Compiling rf_switch_node.c
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\ad8364.h" 44/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\ad8364.h" 45/17] unused variable "_frequency"
+carm W537: ["..\src\bsp\support\ad8364.h" 46/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\ad8364.h" 47/17] unused variable "_ad8364"
+carm W537: ["..\src\bsp\support\ad8364.h" 48/32] unused variable "_calibration_data"
+carm W537: ["..\src\bsp\support\ad8364.h" 50/17] unused variable "_calibration_offset"
+carm W537: ["..\src\bsp\support\max5715.h" 38/16] unused variable "_buffer"
+carm W537: ["..\src\bsp\support\max5715.h" 40/22] unused variable "_spi"
+carm W537: ["..\src\bsp\support\max5715.h" 41/23] unused variable "_cs_port"
+carm W537: ["..\src\bsp\support\max5715.h" 42/17] unused variable "_cs_pins"
+carm W537: ["..\src\bsp\support\max5715.h" 43/16] unused variable "_power_mode"
+carm W537: ["..\src\bsp\support\max5715.h" 44/16] unused variable "_vref"
+0 errors, 17 warnings
+Compiling ad8364.c
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\ad8364.h" 44/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\ad8364.h" 45/17] unused variable "_frequency"
+carm W537: ["..\src\bsp\support\ad8364.h" 46/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\ad8364.h" 47/17] unused variable "_ad8364"
+carm W537: ["..\src\bsp\support\ad8364.h" 48/32] unused variable "_calibration_data"
+carm W537: ["..\src\bsp\support\ad8364.h" 50/17] unused variable "_calibration_offset"
+carm W537: ["..\src\bsp\support\rtd.h" 41/14] unused variable "_rtd"
+carm W537: ["..\src\bsp\support\rtd.h" 43/20] unused variable "CALIBRATION_DATA"
+carm W537: ["..\src\bsp\support\max5715.h" 38/16] unused variable "_buffer"
+carm W537: ["..\src\bsp\support\max5715.h" 40/22] unused variable "_spi"
+carm W537: ["..\src\bsp\support\max5715.h" 41/23] unused variable "_cs_port"
+carm W537: ["..\src\bsp\support\max5715.h" 42/17] unused variable "_cs_pins"
+carm W537: ["..\src\bsp\support\max5715.h" 43/16] unused variable "_power_mode"
+carm W537: ["..\src\bsp\support\max5715.h" 44/16] unused variable "_vref"
+carm W537: ["..\src\bsp\support\pid.h" 33/14] unused variable "_pid"
+carm W536: ["..\src\bsp\external_node.c" 1153/13] unused static function "update_relays"
+0 errors, 21 warnings
+Compiling hkuwbpa20.c
+carm W560: ["..\src\bsp\rf_load_node.c" 163/33] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\bsp\rf_load_node.c" 163/82] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\bsp\rf_load_node.c" 165/34] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\bsp\rf_load_node.c" 168/41] possible truncation at implicit conversion to type "unsigned char"
+carm W525: ["..\src\bsp\rf_load_node.c" 308/43] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 320/35] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 322/45] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 327/42] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 546/53] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 563/44] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 580/54] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 597/51] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 764/38] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 764/38] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 765/53] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 765/86] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 771/136] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 771/136] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 787/38] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 787/38] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 788/53] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 788/77] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 795/137] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 795/137] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 796/137] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 796/137] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 806/38] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 806/38] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 807/53] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 807/87] discarded 'volatile' qualifier at argument #2
+carm W525: ["..\src\bsp\rf_load_node.c" 823/38] discarded 'volatile' qualifier at argument #1
+carm W523: ["..\src\bsp\rf_load_node.c" 823/38] pointers to different types at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 824/53] discarded 'volatile' qualifier at argument #1
+carm W525: ["..\src\bsp\rf_load_node.c" 824/84] discarded 'volatile' qualifier at argument #2
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\ad8364.h" 44/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\ad8364.h" 45/17] unused variable "_frequency"
+carm W537: ["..\src\bsp\support\ad8364.h" 46/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\ad8364.h" 47/17] unused variable "_ad8364"
+carm W537: ["..\src\bsp\support\ad8364.h" 48/32] unused variable "_calibration_data"
+carm W537: ["..\src\bsp\support\ad8364.h" 50/17] unused variable "_calibration_offset"
+0 errors, 44 warnings
+Compiling max5715.c
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+carm W537: ["..\src\bsp\support\ad8364.h" 44/16] unused variable "_channels"
+carm W537: ["..\src\bsp\support\ad8364.h" 45/17] unused variable "_frequency"
+carm W537: ["..\src\bsp\support\ad8364.h" 46/14] unused variable "_save_configuration"
+carm W537: ["..\src\bsp\support\ad8364.h" 47/17] unused variable "_ad8364"
+carm W537: ["..\src\bsp\support\ad8364.h" 48/32] unused variable "_calibration_data"
+carm W537: ["..\src\bsp\support\ad8364.h" 50/17] unused variable "_calibration_offset"
+carm W537: ["..\src\bsp\support\max5715.h" 38/16] unused variable "_buffer"
+carm W537: ["..\src\bsp\support\max5715.h" 40/22] unused variable "_spi"
+carm W537: ["..\src\bsp\support\max5715.h" 41/23] unused variable "_cs_port"
+carm W537: ["..\src\bsp\support\max5715.h" 42/17] unused variable "_cs_pins"
+carm W537: ["..\src\bsp\support\max5715.h" 43/16] unused variable "_power_mode"
+carm W537: ["..\src\bsp\support\max5715.h" 44/16] unused variable "_vref"
+carm W537: ["..\src\bsp\support\pid.h" 33/14] unused variable "_pid"
+0 errors, 18 warnings
+Compiling mx25l3206e.c
+Compiling pid.c
+Compiling rtd.c
+carm W536: ["..\src\bsp\bsp_common.h" 66/13] unused static function "REVERSE_16"
+carm W536: ["..\src\bsp\bsp_common.h" 72/13] unused static function "REVERSE_32"
+carm W536: ["..\src\bsp\bsp_common.h" 78/13] unused static function "REVERSE_ARRAY_8"
+carm W536: ["..\src\bsp\bsp_common.h" 87/13] unused static function "REVERSE_ARRAY_16"
+carm W536: ["..\src\bsp\bsp_common.h" 96/13] unused static function "REVERSE_ARRAY_32"
+0 errors, 5 warnings
+Compiling tsc102.c
+Compiling logging.c
+carm W560: ["C:\Users\jzou\workspace_arm_v5.2r1\parallax-firmware\lib\tm_stm32f4\tm_stm32f4_spi.h" 468/13] possible truncation at implicit conversion to type "unsigned char"
+carm W536: ["..\src\bsp\support\mx25l3206e.c" 95/16] unused static function "flash_erase_block"
+0 errors, 2 warnings
+carm W560: ["..\src\bsp\support\tsc102.c" 25/18] possible truncation at implicit conversion to type "unsigned char"
+carm W560: ["..\src\bsp\support\tsc102.c" 39/25] possible truncation at implicit conversion to type "unsigned char"
+0 errors, 2 warnings
+Linking to parallax-firmware.abs
+lkarm W972: macro "__FLASH_SIZE" redefined
+lkarm W972: macro "__FLASH_SIZE" redefined
+
+Time consumed: 21529 ms
+**** End of build ****

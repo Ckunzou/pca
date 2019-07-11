@@ -1,0 +1,16 @@
+################################################################################
+# Automatically-generated file. Do not edit!
+################################################################################
+
+C_FILES += "..\PinMapper\stm32_chip_config.c"
+OBJ_FILES += "PinMapper\stm32_chip_config.obj"
+"PinMapper\stm32_chip_config.obj" : "..\PinMapper\stm32_chip_config.c" "PinMapper\.stm32_chip_config.obj.opt"
+	@echo Compiling ${<F}
+	@"${PRODDIR}\bin\ccarm" -f "PinMapper\.stm32_chip_config.obj.opt"
+
+"PinMapper\.stm32_chip_config.obj.opt" : .refresh
+	@argfile "PinMapper\.stm32_chip_config.obj.opt" -o "PinMapper\stm32_chip_config.obj" "..\PinMapper\stm32_chip_config.c" -Cstm32f407ve --processors="C:\Program Files (x86)\TASKING\carm v5.2r1\eclipse\plugins\com.tasking.arm.vendors.stm32_1.37.0.0\etc\processors.xml" -t -Wa-gAHLs -Wa--error-limit=42 -DSTM32F40_41xxx -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader\PinMapper" --language=-gcc,-volatile,+strings,-kanji --fpu=FPv4-sp -O0 --tradeoff=4 -g --source -D__SWPLATFORM__ -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/Configuration" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/CoreSupport" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/CM4/DeviceSupport/ST/STM32F4xx" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/cmsis/include" -DSTM32F4XX=1 -DUSE_STDPERIPH_DRIVER=1 -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/platform/discrete/stm32/firmware/stm32f4xx_stdperiph_driver/inc" -I"C:\Users\jzou\workspace_arm_v5.2r1\parallax-bootloader/SoftwarePlatform/services/sysutils/include" --global-type-checking -c --dep-file="PinMapper\.stm32_chip_config.obj.d" -Wc--make-target="PinMapper\stm32_chip_config.obj"
+DEPENDENCY_FILES += "PinMapper\.stm32_chip_config.obj.d"
+
+
+GENERATED_FILES += "PinMapper\stm32_chip_config.obj" "PinMapper\.stm32_chip_config.obj.opt" "PinMapper\.stm32_chip_config.obj.d" "PinMapper\stm32_chip_config.src" "PinMapper\stm32_chip_config.lst"

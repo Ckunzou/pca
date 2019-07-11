@@ -1,0 +1,11 @@
+
+**** Build of configuration Debug for project parallax-bootloader ****
+
+"C:\\Program Files (x86)\\TASKING\\carm v5.2r1\\bin\\amk" -j4 all 
+Compiling bootloader_main.c
+Linking to parallax-bootloader.abs
+lkarm W972: macro "__FLASH_SIZE" redefined
+lkarm W972: macro "__FLASH_SIZE" redefined
+
+Time consumed: 1474 ms
+**** End of build ****

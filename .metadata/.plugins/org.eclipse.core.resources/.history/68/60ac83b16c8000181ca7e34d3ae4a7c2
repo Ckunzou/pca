@@ -1,0 +1,52 @@
+################################################################################
+# Automatically-generated file. Do not edit!
+################################################################################
+
+PROJ 	= parallax-bootloader
+PRODDIR = C:\Program Files (x86)\TASKING\carm v5.2r1
+
+-include "..\makefile.init"
+
+all :
+
+-include "subdir.mk"
+-include "PinMapper\subdir.mk"
+-include "SoftwarePlatform\Configuration\subdir.mk"
+-include "SoftwarePlatform\cstart\carm\src\subdir.mk"
+-include "SoftwarePlatform\platform\discrete\stm32\firmware\cmsis\CM4\DeviceSupport\ST\STM32F4xx\subdir.mk"
+-include "SoftwarePlatform\platform\discrete\stm32\firmware\stm32f4xx_stdperiph_driver\src\subdir.mk"
+-include "SoftwarePlatform\services\sysutils\src\subdir.mk"
+-include "src\subdir.mk"
+-include "src\bootloader\subdir.mk"
+-include "..\makefile.defs"
+
+EXT_LIBRARIES =
+
+all : "parallax-bootloader.abs"
+
+"parallax-bootloader.abs" : $(OBJ_FILES) $(EXT_LIBRARIES) ".parallax-bootloader.abs.opt"
+	@echo Linking to ${@F}
+	@"${PRODDIR}\bin\ccarm" -f ".parallax-bootloader.abs.opt"
+
+".parallax-bootloader.abs.opt" : .refresh
+	@argfile ".parallax-bootloader.abs.opt" -o "parallax-bootloader.abs" $(OBJ_FILES) $(EXT_LIBRARIES) -Cstm32f407ve --processors="C:\Program Files (x86)\TASKING\carm v5.2r1\eclipse\plugins\com.tasking.arm.vendors.stm32_1.37.0.0\etc\processors.xml" -t -Wl-o"${PROJ}.hex":IHEX:4 --hex-format=s -Wl-D__FLASH_SIZE=16k -Wl-I"C:\Program Files (x86)\TASKING\carm v5.2r1\eclipse\plugins\com.tasking.arm.vendors.stm32_1.37.0.0\include.lsl" -Wl-D__DEVICE_LSL_FILE=stm32f4xx.lsl -Wl-DSTM32F40_41xxx -Wl-D__FLASH_SIZE=512k -Wl-D__SRAM_SIZE=192k "../parallax-bootloader.lsl" -Wl-OtZxycL -Wl--map-file="${PROJ}.mapxml":XML -Wl-mcrfiklsmNOduq -Wl--error-limit=42 --fpu=FPv4-sp -g --global-type-checking -Wl--dep-file=".parallax-bootloader.abs.d" -Wl--make-target="parallax-bootloader.abs"
+DEPENDENCY_FILES += ".parallax-bootloader.abs.d"
+-include $(DEPENDENCY_FILES)
+
+$(EXT_LIBRARIES) : .dummy
+
+GENERATED_FILES += "parallax-bootloader.abs" "parallax-bootloader*.sre" "parallax-bootloader*.hex" "parallax-bootloader.map*" "parallax-bootloader.mdf" ".parallax-bootloader.abs.opt" ".parallax-bootloader.abs.d"
+-include "..\makefile.targets"
+
+clean : ".clean.opt"
+	@echo Cleaning
+	@rm -f -m ".clean.opt"
+
+".clean.opt" : .refresh
+	@argfile ".clean.opt" $(GENERATED_FILES) $(OPTIONAL_FILES)
+
+GENERATED_FILES += ".clean.opt"
+OPTIONAL_FILES +=  "*.pre" "*.lst"
+
+
+.PHONY : .dummy .refresh

@@ -1,0 +1,69 @@
+
+**** Build of configuration Debug for project bootloader ****
+
+"C:\\Program Files (x86)\\TASKING\\carm v5.2r1\\bin\\amk" -j4 all -a 
+Compiling stm32_chip_config.c
+Compiling __framework_init.c
+Compiling per_stm32f4xx_can_cfg_instance.c
+Compiling per_stm32f4xx_crc_cfg_instance.c
+Compiling per_stm32f4xx_flash_cfg_instance.c
+Compiling per_stm32f4xx_pwr_cfg_instance.c
+Compiling per_stm32f4xx_rcc_cfg_instance.c
+Compiling per_stm32f4xx_syscfg_cfg_instance.c
+Compiling per_stm32f4xx_usart_cfg_instance.c
+Compiling cstart.c
+Compiling init_memory.c
+Compiling system_stm32f4xx.c
+Compiling misc.c
+Compiling stm32f4xx_adc.c
+Compiling stm32f4xx_can.c
+Compiling stm32f4xx_cec.c
+Compiling stm32f4xx_crc.c
+Compiling stm32f4xx_cryp.c
+Compiling stm32f4xx_cryp_aes.c
+Compiling stm32f4xx_cryp_des.c
+Compiling stm32f4xx_cryp_tdes.c
+Compiling stm32f4xx_dac.c
+Compiling stm32f4xx_dbgmcu.c
+Compiling stm32f4xx_dcmi.c
+Compiling stm32f4xx_dma.c
+Compiling stm32f4xx_dma2d.c
+Compiling stm32f4xx_exti.c
+Compiling stm32f4xx_flash.c
+Compiling stm32f4xx_flash_ramfunc.c
+Compiling stm32f4xx_fmc.c
+Compiling stm32f4xx_fmpi2c.c
+Compiling stm32f4xx_fsmc.c
+Compiling stm32f4xx_gpio.c
+Compiling stm32f4xx_hash.c
+Compiling stm32f4xx_hash_md5.c
+Compiling stm32f4xx_hash_sha1.c
+Compiling stm32f4xx_i2c.c
+Compiling stm32f4xx_iwdg.c
+Compiling stm32f4xx_ltdc.c
+Compiling stm32f4xx_pwr.c
+Compiling stm32f4xx_qspi.c
+Compiling stm32f4xx_rcc.c
+Compiling stm32f4xx_rng.c
+Compiling stm32f4xx_rtc.c
+Compiling stm32f4xx_sai.c
+Compiling stm32f4xx_sdio.c
+Compiling stm32f4xx_spdifrx.c
+Compiling stm32f4xx_spi.c
+Compiling stm32f4xx_syscfg.c
+Compiling stm32f4xx_tim.c
+Compiling stm32f4xx_usart.c
+Compiling stm32f4xx_wwdg.c
+Compiling sysutils.c
+Compiling util_string.c
+Compiling bootloader_main.c
+Compiling bootloader_common.c
+Linking to parallax-bootloader.abs
+lkarm W972: macro "__FLASH_SIZE" redefined
+lkarm W972: macro "__FLASH_SIZE" redefined
+amk E452: ["makefile" 29/0] target 'parallax-bootloader.abs' returned exit code 1
+lkarm E821: cannot open "../bootloader.lsl"
+amk E451: make stopped
+
+Time consumed: 4733 ms
+**** End of build ****
